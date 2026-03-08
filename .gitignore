@@ -99,6 +99,13 @@ dist
 # Sveltekit cache directory
 .svelte-kit/
 
+# Drizzle ORM and SQL files
+drizzle/
+*.sql
+
+# npm lock file
+package-lock.json
+
 # vitepress build output
 **/.vitepress/dist
 
