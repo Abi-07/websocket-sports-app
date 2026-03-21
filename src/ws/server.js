@@ -14,43 +14,55 @@ function broadcast(wss, payload) {
 
 export function attachWebSocketServer(server) {
   const wss = new WebSocketServer({
-    server,
+    noServer: true,
     path: '/ws',
     maxPayload: 1024 * 1024, // 1MB
   });
 
-  wss.on('connection', async (socket, req) => {
+  // Handle the HTTP Upgrade request manually
+  server.on('upgrade', async (request, socket, head) => {
+    const { pathname } = new URL(request.url, `http://${request.headers.host}`);
+
+    if (pathname !== '/ws') {
+      return;
+    }
+
     if (wsArcjet) {
       try {
-        const decision = await wsArcjet.protect(req);
+        const decision = await wsArcjet.protect(request);
+
         if (decision.isDenied()) {
-          const code = decision.reason.isRateLimit() ? 1013 : 1008;
-          const reason = decision.reason.isRateLimit()
-            ? 'Rate limit exceeded'
-            : 'Forbidden';
-          socket.close(code, reason);
+          const status = decision.reason.isRateLimit() ? 429 : 403;
+          socket.write(`HTTP/1.1 ${status} ${decision.reason.type}\r\n\r\n`);
+          socket.destroy();
           return;
         }
       } catch (error) {
         console.error('WS connection error:', error);
-        socket.close(1011, 'Server security error');
+        socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+        socket.destroy();
         return;
       }
     }
 
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  });
+
+  wss.on('connection', (socket) => {
     socket.isAlive = true;
     socket.on('pong', () => {
       socket.isAlive = true;
     });
+
     sendJson(socket, { type: 'welcome' });
     socket.on('error', console.error);
   });
 
   const interval = setInterval(() => {
     wss.clients.forEach((socket) => {
-      if (!socket.isAlive) {
-        return socket.terminate();
-      }
+      if (!socket.isAlive) return socket.terminate();
       socket.isAlive = false;
       socket.ping();
     });
