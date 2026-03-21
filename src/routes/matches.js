@@ -7,6 +7,7 @@ import { getMatchStatus } from '../utils/match-status.js';
 import { db } from '../db/db.js';
 import { matches } from '../db/schema.js';
 import { string } from 'zod';
+import { desc } from 'drizzle-orm';
 
 export const matchRouter = Router();
 
@@ -29,7 +30,7 @@ matchRouter.get('/', async (req, res) => {
       .from(matches)
       .orderBy(desc(matches.createdAt))
       .limit(limit);
-    res.json({ data });
+    return res.json({ data });
   } catch (error) {
     return res.status(500).json({
       error: 'Failed to fetch matches',
